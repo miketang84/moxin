@@ -1,5 +1,7 @@
 mod backend_impls;
+mod candle_backend;
 mod store;
+mod token_output_stream;
 
 use moxin_protocol::protocol::Command;
 use std::sync::mpsc;

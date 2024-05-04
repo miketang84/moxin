@@ -12,9 +12,12 @@ use moxin_protocol::{
         LocalServerResponse,
     },
 };
-use wasmedge_sdk::Module;
+// use wasmedge_sdk::Module;
 
-use crate::store::{self, ModelFileDownloader, RemoteModel};
+use crate::{
+    candle_backend,
+    store::{self, ModelFileDownloader, RemoteModel},
+};
 
 mod chat_ui {
 
@@ -60,13 +63,13 @@ mod chat_ui {
         },
         protocol::{LoadModelOptions, LoadModelResponse, LoadedModelInfo},
     };
-    use wasmedge_sdk::{
-        error::{CoreError, CoreExecutionError},
-        wasi::WasiModule,
-        CallingFrame, ImportObject, Instance, Module, Store, Vm, WasmValue,
-    };
+    // use wasmedge_sdk::{
+    //     error::{CoreError, CoreExecutionError},
+    //     wasi::WasiModule,
+    //     CallingFrame, ImportObject, Instance, Module, Store, Vm, WasmValue,
+    // };
 
-    use crate::store::download_files::DownloadedFile;
+    use crate::{candle_backend, store::download_files::DownloadedFile};
 
     #[derive(Debug)]
     pub struct ChatBotUi {
@@ -329,118 +332,144 @@ mod chat_ui {
         }
     }
 
-    pub fn module(data: ChatBotUi) -> wasmedge_sdk::WasmEdgeResult<ImportObject<ChatBotUi>> {
-        let mut module_builder = wasmedge_sdk::ImportObjectBuilder::new("chat_ui", data)?;
-        module_builder.with_func::<(i32, i32), i32>("get_input", get_input)?;
-        module_builder.with_func::<(i32, i32), i32>("push_token", push_token)?;
-        module_builder.with_func::<i32, ()>("return_token_error", return_token_error)?;
+    // pub fn module(data: ChatBotUi) -> wasmedge_sdk::WasmEdgeResult<ImportObject<ChatBotUi>> {
+    //     let mut module_builder = wasmedge_sdk::ImportObjectBuilder::new("chat_ui", data)?;
+    //     module_builder.with_func::<(i32, i32), i32>("get_input", get_input)?;
+    //     module_builder.with_func::<(i32, i32), i32>("push_token", push_token)?;
+    //     module_builder.with_func::<i32, ()>("return_token_error", return_token_error)?;
 
-        Ok(module_builder.build())
-    }
+    //     Ok(module_builder.build())
+    // }
 
-    fn create_wasi(
-        file: &DownloadedFile,
-        load_model: &LoadModelOptions,
-    ) -> wasmedge_sdk::WasmEdgeResult<WasiModule> {
-        let ctx_size = if load_model.n_ctx > 0 {
-            Some(load_model.n_ctx.to_string())
-        } else {
-            None
-        };
+    // fn create_wasi(
+    //     file: &DownloadedFile,
+    //     load_model: &LoadModelOptions,
+    // ) -> wasmedge_sdk::WasmEdgeResult<WasiModule> {
+    //     let ctx_size = if load_model.n_ctx > 0 {
+    //         Some(load_model.n_ctx.to_string())
+    //     } else {
+    //         None
+    //     };
 
-        let n_gpu_layers = match load_model.gpu_layers {
-            moxin_protocol::protocol::GPULayers::Specific(n) => Some(n.to_string()),
-            moxin_protocol::protocol::GPULayers::Max => None,
-        };
+    //     let n_gpu_layers = match load_model.gpu_layers {
+    //         moxin_protocol::protocol::GPULayers::Specific(n) => Some(n.to_string()),
+    //         moxin_protocol::protocol::GPULayers::Max => None,
+    //     };
 
-        let batch_size = if load_model.n_batch > 0 {
-            Some(load_model.n_batch.to_string())
-        } else {
-            None
-        };
+    //     let batch_size = if load_model.n_batch > 0 {
+    //         Some(load_model.n_batch.to_string())
+    //     } else {
+    //         None
+    //     };
 
-        let mut prompt_template = load_model.prompt_template.clone();
-        if prompt_template.is_none() && !file.prompt_template.is_empty() {
-            prompt_template = Some(file.prompt_template.clone());
-        }
+    //     let mut prompt_template = load_model.prompt_template.clone();
+    //     if prompt_template.is_none() && !file.prompt_template.is_empty() {
+    //         prompt_template = Some(file.prompt_template.clone());
+    //     }
 
-        let reverse_prompt = if file.reverse_prompt.is_empty() {
-            None
-        } else {
-            Some(file.reverse_prompt.clone())
-        };
+    //     let reverse_prompt = if file.reverse_prompt.is_empty() {
+    //         None
+    //     } else {
+    //         Some(file.reverse_prompt.clone())
+    //     };
 
-        let module_alias = file.name.as_ref();
+    //     let module_alias = file.name.as_ref();
 
-        let mut args = vec!["chat_ui.wasm", "-a", module_alias];
+    //     let mut args = vec!["chat_ui.wasm", "-a", module_alias];
 
-        macro_rules! add_args {
-            ($flag:expr, $value:expr) => {
-                if let Some(ref value) = $value {
-                    args.push($flag);
-                    args.push(value.as_str());
-                }
-            };
-        }
+    //     macro_rules! add_args {
+    //         ($flag:expr, $value:expr) => {
+    //             if let Some(ref value) = $value {
+    //                 args.push($flag);
+    //                 args.push(value.as_str());
+    //             }
+    //         };
+    //     }
 
-        add_args!("-c", ctx_size);
-        add_args!("-g", n_gpu_layers);
-        add_args!("-b", batch_size);
-        add_args!("-p", prompt_template);
-        add_args!("-r", reverse_prompt);
+    //     add_args!("-c", ctx_size);
+    //     add_args!("-g", n_gpu_layers);
+    //     add_args!("-b", batch_size);
+    //     add_args!("-p", prompt_template);
+    //     add_args!("-r", reverse_prompt);
 
-        WasiModule::create(Some(args), None, None)
-    }
+    //     WasiModule::create(Some(args), None, None)
+    // }
 
-    pub fn nn_preload_file(file: &DownloadedFile) {
-        let file_path = Path::new(&file.download_dir)
-            .join(&file.model_id)
-            .join(&file.name);
+    // pub fn nn_preload_file(file: &DownloadedFile) {
+    //     let file_path = Path::new(&file.download_dir)
+    //         .join(&file.model_id)
+    //         .join(&file.name);
 
-        let preloads = wasmedge_sdk::plugin::NNPreload::new(
-            file.name.clone(),
-            wasmedge_sdk::plugin::GraphEncoding::GGML,
-            wasmedge_sdk::plugin::ExecutionTarget::AUTO,
-            &file_path,
-        );
-        wasmedge_sdk::plugin::PluginManager::nn_preload(vec![preloads]);
-    }
+    //     let preloads = wasmedge_sdk::plugin::NNPreload::new(
+    //         file.name.clone(),
+    //         wasmedge_sdk::plugin::GraphEncoding::GGML,
+    //         wasmedge_sdk::plugin::ExecutionTarget::AUTO,
+    //         &file_path,
+    //     );
+    //     wasmedge_sdk::plugin::PluginManager::nn_preload(vec![preloads]);
+    // }
 
-    pub fn run_wasm_by_downloaded_file(
-        wasm_module: Module,
+    // pub fn run_wasm_by_downloaded_file(
+    //     wasm_module: Module,
+    //     request_rx: Receiver<(ChatRequestData, Sender<anyhow::Result<ChatResponse>>)>,
+    //     model_running_controller: Arc<AtomicBool>,
+    //     file: DownloadedFile,
+    //     load_model: LoadModelOptions,
+    //     tx: Sender<anyhow::Result<LoadModelResponse>>,
+    // ) {
+    //     use wasmedge_sdk::vm::SyncInst;
+    //     use wasmedge_sdk::AsInstance;
+
+    //     let mut instances: HashMap<String, &mut (dyn SyncInst)> = HashMap::new();
+
+    //     let mut wasi = create_wasi(&file, &load_model).unwrap();
+    //     let mut chatui = module(ChatBotUi::new(
+    //         request_rx,
+    //         model_running_controller,
+    //         file,
+    //         load_model,
+    //         tx,
+    //     ))
+    //     .unwrap();
+
+    //     instances.insert(wasi.name().to_string(), wasi.as_mut());
+    //     let mut wasi_nn = wasmedge_sdk::plugin::PluginManager::load_plugin_wasi_nn().unwrap();
+    //     instances.insert(wasi_nn.name().unwrap(), &mut wasi_nn);
+    //     instances.insert(chatui.name().unwrap(), &mut chatui);
+
+    //     let store = Store::new(None, instances).unwrap();
+    //     let mut vm = Vm::new(store);
+    //     vm.register_module(None, wasm_module.clone()).unwrap();
+
+    //     let _ = vm.run_func(None, "_start", []);
+
+    //     log::debug!("wasm exit");
+    // }
+
+    pub fn run_by_downloaded_file(
+        model: candle_backend::ModelWeights,
+        tos: candle_backend::TokenOutputStream,
         request_rx: Receiver<(ChatRequestData, Sender<anyhow::Result<ChatResponse>>)>,
         model_running_controller: Arc<AtomicBool>,
         file: DownloadedFile,
         load_model: LoadModelOptions,
         tx: Sender<anyhow::Result<LoadModelResponse>>,
     ) {
-        use wasmedge_sdk::vm::SyncInst;
-        use wasmedge_sdk::AsInstance;
+        let mut chatui = ChatBotUi::new(request_rx, model_running_controller, file, load_model, tx);
 
-        let mut instances: HashMap<String, &mut (dyn SyncInst)> = HashMap::new();
+        // instances.insert(wasi.name().to_string(), wasi.as_mut());
+        // let mut wasi_nn = wasmedge_sdk::plugin::PluginManager::load_plugin_wasi_nn().unwrap();
+        // instances.insert(wasi_nn.name().unwrap(), &mut wasi_nn);
+        // instances.insert(chatui.name().unwrap(), &mut chatui);
 
-        let mut wasi = create_wasi(&file, &load_model).unwrap();
-        let mut chatui = module(ChatBotUi::new(
-            request_rx,
-            model_running_controller,
-            file,
-            load_model,
-            tx,
-        ))
-        .unwrap();
+        // let store = Store::new(None, instances).unwrap();
+        // let mut vm = Vm::new(store);
+        // vm.register_module(None, wasm_module.clone()).unwrap();
 
-        instances.insert(wasi.name().to_string(), wasi.as_mut());
-        let mut wasi_nn = wasmedge_sdk::plugin::PluginManager::load_plugin_wasi_nn().unwrap();
-        instances.insert(wasi_nn.name().unwrap(), &mut wasi_nn);
-        instances.insert(chatui.name().unwrap(), &mut chatui);
+        // let _ = vm.run_func(None, "_start", []);
+        candle_backend::candle_chat_interactive(model, tos);
 
-        let store = Store::new(None, instances).unwrap();
-        let mut vm = Vm::new(store);
-        vm.register_module(None, wasm_module.clone()).unwrap();
-
-        let _ = vm.run_func(None, "_start", []);
-
-        log::debug!("wasm exit");
+        log::debug!("candle procedure exit");
     }
 
     pub struct Model {
@@ -451,7 +480,7 @@ mod chat_ui {
 
     impl Model {
         pub fn new_by_downloaded_file(
-            wasm_module: Module,
+            // wasm_module: Module,
             file: DownloadedFile,
             options: LoadModelOptions,
             tx: Sender<anyhow::Result<LoadModelResponse>>,
@@ -461,8 +490,19 @@ mod chat_ui {
             let model_running_controller_ = model_running_controller.clone();
 
             let model_thread = std::thread::spawn(move || {
-                run_wasm_by_downloaded_file(
-                    wasm_module,
+                // run_wasm_by_downloaded_file(
+                //     wasm_module,
+                //     request_rx,
+                //     model_running_controller_,
+                //     file,
+                //     options,
+                //     tx,
+                // )
+                let (model, tos) =
+                    candle_backend::candle_init_args().expect("failed on init model");
+                run_by_downloaded_file(
+                    model,
+                    tos,
                     request_rx,
                     model_running_controller_,
                     file,
@@ -851,7 +891,7 @@ impl BackendImpl {
         models_dir: String,
         max_download_threads: usize,
     ) -> Sender<Command> {
-        wasmedge_sdk::plugin::PluginManager::load(None).unwrap();
+        // wasmedge_sdk::plugin::PluginManager::load(None).unwrap();
 
         let sql_conn = rusqlite::Connection::open(format!("{home_dir}/data.sqlite")).unwrap();
 
@@ -898,7 +938,8 @@ impl BackendImpl {
         tx
     }
 
-    fn handle_command(&mut self, wasm_module: &Module, built_in_cmd: BuiltInCommand) {
+    // fn handle_command(&mut self, wasm_module: &Module, built_in_cmd: BuiltInCommand) {
+    fn handle_command(&mut self, built_in_cmd: BuiltInCommand) {
         match built_in_cmd {
             BuiltInCommand::Model(file) => match file {
                 ModelManagementCommand::GetFeaturedModels(tx) => {
@@ -1053,12 +1094,11 @@ impl BackendImpl {
 
                     match download_file {
                         Ok(file) => {
-                            chat_ui::nn_preload_file(&file);
+                            // chat_ui::nn_preload_file(&file);
+                            // chat_ui::candle_init_model(&file);
                             let model = chat_ui::Model::new_by_downloaded_file(
-                                wasm_module.clone(),
-                                file,
-                                options,
-                                tx,
+                                // wasm_module.clone(),
+                                file, options, tx,
                             );
                             if let Some(old_model) = self.model.replace(model) {
                                 old_model.stop();
@@ -1093,12 +1133,13 @@ impl BackendImpl {
     }
 
     fn run_loop(&mut self) {
-        static WASM: &[u8] = include_bytes!("../chat_ui.wasm");
-        let wasm_module = Module::from_bytes(None, WASM).unwrap();
+        // static WASM: &[u8] = include_bytes!("../chat_ui.wasm");
+        // let wasm_module = Module::from_bytes(None, WASM).unwrap();
+        candle_backend::candle_init_args();
 
         loop {
             if let Ok(cmd) = self.rx.recv() {
-                self.handle_command(&wasm_module, cmd.into());
+                self.handle_command(cmd.into());
             } else {
                 break;
             }
